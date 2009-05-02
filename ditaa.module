@@ -1,0 +1,92 @@
+<?php
+
+/**
+ * Mix avec dotclearsyntax, si il existe
+ */
+
+function ditaa_filter($op, $delta = 0, $format = -1, $text = '', $cache_id = 0) {
+	switch($op) {
+		case 'list' :
+			return array(0 => t('Ditaa Schema filter'));
+		case 'description':
+			return t('Building cute schema with Ditaa');
+		case 'settings':
+			break;
+		case 'no cache':
+			return FALSE;
+		case 'prepare':
+			return $text;
+		case 'process' :
+			return _ditaa_process($text, $format, $cache_id);
+		default:
+			return $text;
+	}
+
+}
+
+function ditaa_menu(){
+	$items['admin/settings/ditaa'] = array(
+		'description' => 'Ditaa love your schema',
+		'title' => 'Ditaa',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('ditaa_admin_settings'),
+		'access arguments' => array('administer site configuration'),
+		'type' => MENU_NORMAL_ITEM,
+		'file' => 'ditaa.admin.inc',
+	);
+	return $items;
+}
+
+$_ditaa_instance = null;
+
+class _ditaaObj {
+	function __construct($id) {
+		$this->id = $id;
+		$this->cpt = 0;
+	}
+	function _ditaa_match($matches) {
+		if(count($matches) < 2) {
+			return $matches[0];
+		}
+		//print_r($matches[1]);
+		global $_ditaa_instance;
+		$ditaapath = file_create_path('ditaa');
+		file_check_directory($ditaapath, FILE_CREATE_DIRECTORY);
+		$name = $ditaapath . '/' . str_replace(':','_', $this->id) . '_' . $this->cpt++ . '.png';
+		try {
+			$_ditaa_instance->saveImage($matches[1], $name);
+		} catch(Exception $exception) {
+			watchdog('Ditaa', $exception->getMessage(), null, WATCHDOG_ERROR);
+			drupal_set_message($exception->getMessage() . $exception->getTraceAsString(), 'error');
+		}
+		//return '<img src="' . file_create_url($name) . '" />';
+		//var_dump('{{' . file_create_url($name) . '}}');
+		$modules = module_list();
+		if(in_array('dokuwiki', $modules))
+			return '{{' . file_create_url($name) . '}}';
+		if(in_array('dotclearsyntax', $modules))
+			return "\n((" . file_create_url($name) . "|Ditaa|C))\n";
+		return '<img src="' . file_create_url($name) . '"/>';
+}
+
+}
+function _ditaa_process($text, $format, $cache_id) {
+	//var_dump($text);
+	global $_ditaa_instance;
+	if($_ditaa_instance == null) {
+		include_once drupal_get_path('module', 'ditaa') .'/class.ditaa.php';
+		$_ditaa_instance = new Ditaa(variable_get('ditaa_url', 'http://localhost:8080/ditaa'));
+		$flags = variable_get('ditaa_flags', array());
+		$_ditaa_instance->antialias = in_array('antialias', $flags);
+		$_ditaa_instance->shadows = in_array('shadows', $flags);
+		$_ditaa_instance->round_corners = in_array('round corner', $flags);
+		$_ditaa_instance->separations = in_array('separations', $flags);
+	}
+	$d = new _ditaaObj($cache_id);
+	$count = 0;
+	$t =preg_replace_callback('/\n|^\[ditaa\]\n(.*)\n\[\/ditaa\]/msU', array($d, '_ditaa_match'), $text, -1, $count);
+	//var_dump('count', $count);
+	//var_dump('t', $t);
+	return $t;
+
+}

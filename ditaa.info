@@ -1,0 +1,7 @@
+; $Id$
+name = Ditaa Schema
+description = Ditaa syntax for drawing schema
+package = "Input filters"
+dependencies[] = filter
+core = 6.x
+php = 5.2
